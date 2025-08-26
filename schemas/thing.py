@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from datetime import datetime
 from typing import List
 
 from pydantic import BaseModel, model_validator
@@ -78,6 +77,7 @@ class CreateWellScreen(BaseModel):
     screen_depth_bottom: float
     screen_depth_top: float
     screen_type: str | None = None
+    screen_description: str | None = None
 
     @model_validator(mode="after")
     def validate_screen_type(self):
@@ -139,6 +139,14 @@ class ThingResponse(WellResponse, SpringResponse):
     geometry: dict | None = None
 
 
+class ThingIdLinkResponse(ORMBaseModel):
+    thing_id: int
+    thing: ThingResponse
+    relation: str
+    alternate_id: str
+    alternate_organization: str
+
+
 class LocationWellResponse(LocationResponse):
     """
     Response schema for sample location with well details.
@@ -153,18 +161,11 @@ class WellScreenResponse(ORMBaseModel):
     """
 
     thing_id: int
+    thing: WellResponse
     screen_depth_bottom: float
     screen_depth_top: float
-
-
-class GroupResponse(ORMBaseModel):
-    """
-    Response schema for group details.
-    """
-
-    name: str
-    description: str | None = None
-    parent_group_id: int | None = None
+    screen_type: str | None = None
+    screen_description: str | None = None
 
 
 class GeoJSONGeometry(BaseModel):
@@ -174,8 +175,11 @@ class GeoJSONGeometry(BaseModel):
 
     type: str
     coordinates: (
-        List[float] | List[List[float]] | List[List[List[float]]]
-    )  # Supports Point, LineString, Polygon, etc.
+        List[float]
+        | List[List[float]]
+        | List[List[List[float]]]
+        | List[List[List[List[float]]]]
+    )  # Supports Point, LineString, Polygon, MultiPolygon
 
 
 class Feature(BaseModel):
@@ -222,6 +226,20 @@ class UpdateWell(UpdateThing):
     well_construction_notes: str | None = None
 
     # group: str | None = None  # Optional group for the well
+
+
+class UpdateThingIdLink(BaseModel):
+    alternate_organization: str | None = None
+    alternate_id: str | None = None
+    relation: str | None = None
+    thing_id: int | None = None
+
+
+class UpdateWellScreen(BaseModel):
+    screen_depth_bottom: float | None = None
+    screen_depth_top: float | None = None
+    screen_description: str | None = None
+    screen_type: str | None = None
 
 
 # ============= EOF =============================================

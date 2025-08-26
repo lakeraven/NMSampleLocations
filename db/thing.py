@@ -15,26 +15,11 @@
 # ===============================================================================
 from sqlalchemy import Integer, ForeignKey, String, Column, Float
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import relationship, mapped_column, declared_attr
+from sqlalchemy.orm import relationship, mapped_column
 from sqlalchemy_utils import TSVectorType
 
 from db import lexicon_term
 from db.base import AutoBaseMixin, Base, ReleaseMixin
-
-
-class ThingChildMixin:
-    @declared_attr
-    def thing_id(self):
-        return mapped_column(
-            Integer,
-            ForeignKey("thing.id", ondelete="CASCADE"),
-            nullable=False,
-            unique=True,
-        )
-
-    @declared_attr
-    def thing(self):
-        return relationship("Thing")
 
 
 class Thing(Base, AutoBaseMixin, ReleaseMixin):
@@ -59,6 +44,14 @@ class Thing(Base, AutoBaseMixin, ReleaseMixin):
         order_by="LocationThingAssociation.effective_start.desc()",
     )
     locations = association_proxy("location_associations", "location")
+
+    contact_associations = relationship(
+        "ThingContactAssociation",
+        back_populates="thing",
+        overlaps="contacts",
+        cascade="all, delete-orphan",
+    )
+    contacts = association_proxy("contact_associations", "contact")
 
     # Well fields
     well_depth = Column(
@@ -101,7 +94,7 @@ class ThingIdLink(Base, AutoBaseMixin):
     alternate_id = mapped_column(String(100), nullable=False)
     alternate_organization = lexicon_term(nullable=False)
 
-    # thing = relationship("Thing", back_populates="links")
+    thing = relationship("Thing", backref="links")
 
 
 class WellScreen(Base, AutoBaseMixin):
@@ -116,8 +109,11 @@ class WellScreen(Base, AutoBaseMixin):
     )
     screen_type = lexicon_term()  # e.g., "PVC", "Steel", etc.
 
+    screen_description = Column(
+        String(1000), nullable=True, info={"unit": "description of the screen"}
+    )
     # Define a relationship to well if needed
-    # well = relationship("Well")
+    thing = relationship("Thing")
 
 
 # ============= EOF =============================================

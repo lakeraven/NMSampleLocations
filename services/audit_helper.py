@@ -13,16 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from sqlalchemy import Column, String, Integer, ForeignKey
-from sqlalchemy.orm import relationship
-
-from db.base import Base, AutoBaseMixin
-
-from db.sensor.sensor import SensorMixin
+from sqlalchemy.orm import DeclarativeBase
 
 
-class GroundwaterLevelSensor(Base, AutoBaseMixin, SensorMixin):
-    pass
+def audit_add(user: dict, obj: DeclarativeBase) -> None:
+    # see note in "AuditMixin"
+    if user:
+        obj.created_by_id = user["sub"]
+        obj.created_by_name = user["name"]
 
 
 # ============= EOF =============================================

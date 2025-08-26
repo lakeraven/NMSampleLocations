@@ -24,6 +24,7 @@ from pydantic import (
 from typing import Annotated
 from typing_extensions import Self
 
+from schemas.thing import ThingResponse
 
 """
 REFACTOR TODO: can we use inheritance for commonly defined fields and then set them as optional 
@@ -51,8 +52,9 @@ class ValidateSample(BaseModel):
     #             )
     #     return sample_bottom
 
-    # REFACTOR TODO: fields are evaluated in the order in which they are defined.
-    # are sample top/bottom really working as expected?
+    sample_date: AwareDatetime | None = None
+    sample_top: float | None = None
+    sample_bottom: float | None = None
 
     @model_validator(mode="after")
     def validate_top_and_bottom(self) -> Self:
@@ -143,6 +145,7 @@ class UpdateSample(ValidateSample):
 class SampleResponse(BaseModel):
     id: int
     thing_id: int
+    thing: ThingResponse
     sample_type: str
     field_sample_id: str
     sample_date: AwareDatetime

@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from pydantic import BaseModel, AwareDatetime
+from pydantic import BaseModel
+
+from schemas import ORMBaseModel
 
 
 class BaseAsset(BaseModel):
@@ -22,31 +24,24 @@ class BaseAsset(BaseModel):
     storage_path: str
     mime_type: str
     size: int
-    url: str
-    thing_id: int | None = None
+    uri: str
 
 
 # -------- CREATE ----------
 class CreateAsset(BaseAsset):
-    pass
+    thing_id: int | None = None
 
 
 # -------- RESPONSE --------
-class AssetResponse(BaseAsset):
-    id: int
-    # name: str
-    # label: str
-    # storage_service: str
-    # storage_path: str
-    # mime_type: str
-    # size: int
-    created_at: AwareDatetime
+class AssetResponse(ORMBaseModel, BaseAsset):
     storage_service: str
+    signed_url: str | None = None
 
 
 # -------- UPDATE ----------
-class UpdateAsset(BaseAsset):
-    pass
+class UpdateAsset(BaseModel):
+    name: str | None = None
+    label: str | None = None
 
 
 # ============= EOF =============================================

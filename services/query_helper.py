@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from fastapi_pagination.ext.sqlalchemy import paginate
-from sqlalchemy import select, Float, Integer, Column, Select
+from sqlalchemy import select, Float, Integer, Column, Select, func
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.sql.elements import OperatorExpression
 from starlette.status import HTTP_404_NOT_FOUND
@@ -121,14 +121,16 @@ def simple_all_getter(session, table) -> list[object]:
     return session.scalars(sql).all()
 
 
-def order_sort_filter(sql, table, sort, order, filter_) -> Select[Any]:
+def order_sort_filter(
+    sql: Select[Any], table: DeclarativeBase, sort: str, order: str, filter_: str
+) -> Select[Any]:
     if order:
         if not sort:
             raise ValueError(
                 "Sort parameter is required when order is specified. "
                 f"The sort parameter should be a column name in the table {table}."
             )
-        attr = getattr(table, sort)
+        attr = func.lower(getattr(table, sort))
         if order.lower() == "asc":
             sql = sql.order_by(attr.asc())
         elif order.lower() == "desc":
@@ -168,9 +170,7 @@ def paginated_all_getter(session, table, sort=None, order=None, filter_=None) ->
 
     sql = select(table)
     sql = order_sort_filter(sql, table, sort, order, filter_)
-    # return session.scalars(sql).all()
     return paginate(query=sql, conn=session)
-    # return paginate(query=sql, conn=session, transformer=lambda items: items)
 
 
 def searchable_getter(session, table, search, vector=None, joins=None) -> list[object]:

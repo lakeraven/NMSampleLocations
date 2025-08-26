@@ -13,76 +13,140 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
+from geoalchemy2.shape import to_shape
 import pytest
 
-from tests import client
+from core.dependencies import admin_function, editor_function, viewer_function
+from db import Location
+from main import app
+from tests import client, override_authentication, cleanup_post_test, cleanup_patch_test
+
+
+@pytest.fixture(scope="module", autouse=True)
+def override_dependencies_fixture():
+    app.dependency_overrides[admin_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[editor_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[viewer_function] = override_authentication()
+
+    yield
+
+    app.dependency_overrides = {}
+
+
+#  ============= Post tests for locations ======================================
 
 
 def test_add_location():
-    response = client.post(
-        "/location",
-        json={
-            "name": "Test Location 3",
-            "point": "POINT(10.1 10.1)",
-            # "visible": True,
-        },
-    )
+    payload = {
+        "name": "test location",
+        "point": "POINT (10.1 10.1)",
+        "release_status": "draft",
+    }
+    response = client.post("/location", json=payload)
+
     assert response.status_code == 201
     data = response.json()
     assert "id" in data
+    assert data["name"] == payload["name"]
+    assert data["point"] == payload["point"]
+    assert data["release_status"] == payload["release_status"]
 
-    response = client.post(
-        "/location",
-        json={
-            "name": "Test Location 4",
-            "point": "POINT(50.0 50.0)",
-            # "visible": False,
-        },
-    )
-    assert response.status_code == 201
+    # cleanup after test
+    cleanup_post_test(Location, data["id"])
+
+
+#  ============= Patch tests for locations =====================================
+
+
+def test_update_location(location):
+    payload = {"point": "POINT (10.1 20.2)", "release_status": "draft"}
+    response = client.patch(f"/location/{location.id}", json=payload)
+    assert response.status_code == 200
     data = response.json()
-    assert "id" in data
+    assert data["id"] == location.id
+    assert data["point"] == payload["point"]
+    assert data["release_status"] == payload["release_status"]
+
+    # cleanup after test
+    cleanup_patch_test(Location, payload, location)
 
 
-def test_update_location():
+def test_patch_location_404_not_found(location):
+    """
+    Testing updating a location that does not exist
+    """
+    bad_location_id = 99999
+    location_name_patch = "another test name"
     response = client.patch(
-        "/location/1",
-        json={
-            "point": "POINT (10.1 20.2)",
-            "release_status": "draft",
-        },
+        f"/location/{bad_location_id}", json={"name": location_name_patch}
     )
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == f"Location with ID {bad_location_id} not found."
+
+
+#  ============= GET tests for locations =======================================
+
+
+def test_get_locations(location):
+    """
+    Test retrieving locations
+    """
+    response = client.get("/location")
     assert response.status_code == 200
     data = response.json()
-    assert "id" in data
-    assert data["point"] == "POINT (10.1 20.2)"
-    assert data["release_status"] == "draft"
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == location.id
+    assert data["items"][0]["name"] == location.name
+    assert data["items"][0]["point"] == to_shape(location.point).wkt
+    assert data["items"][0]["release_status"] == location.release_status
 
 
-@pytest.mark.skip
-def test_get_locations_expand():
-    response = client.get("/base/location?expand=well")
+def test_get_location_by_id(location):
+    response = client.get(f"/location/{location.id}")
     assert response.status_code == 200
     data = response.json()
-    assert "items" in data
-    assert len(data["items"]) > 0
-    for item in data["items"]:
-        assert "id" in item
-        assert "point" in item
-        assert "well" in item
+    assert data["id"] == location.id
+    assert data["name"] == location.name
+    assert data["point"] == to_shape(location.point).wkt
+    assert data["release_status"] == location.release_status
 
 
-@pytest.mark.skip
-def test_get_location_expand():
-    response = client.get("/base/location/1", params={"expand": "well"})
-    assert response.status_code == 200
+def test_get_sample_by_id_404_not_found(location):
+    bad_location_id = 999999999
+    response = client.get(f"/location/{bad_location_id}")
     data = response.json()
-    assert "id" in data
-    assert data["id"] == 1
-    assert "point" in data
-    assert data["point"] == "POINT (10.1 10.1)"
-    assert "well" in data
-    assert len(data["well"]) == 1
+    assert response.status_code == 404
+    assert data["detail"] == f"Location with ID {bad_location_id} not found."
+
+
+#  ============= DELETE tests for locations ====================================
+
+
+def test_delete_location(second_location):
+    response = client.delete(f"/location/{second_location.id}")
+    assert response.status_code == 204
+
+    # Verify the location is deleted
+    response = client.get(f"/location/{second_location.id}")
+    assert response.status_code == 404
+    data = response.json()
+    assert data["detail"] == f"Location with ID {second_location.id} not found."
+
+
+def test_delete_location_404_not_found(second_location):
+    """
+    Testing deleting a location that does not exist
+    """
+    bad_location_id = 99999
+    response = client.delete(f"/location/{bad_location_id}")
+    data = response.json()
+    assert response.status_code == 404
+    assert data["detail"] == f"Location with ID {bad_location_id} not found."
 
 
 # ============= EOF =============================================

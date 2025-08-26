@@ -13,24 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from typing import Union
-
-from fastapi import Depends, Query
+from fastapi import Query, Response
 from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
 from starlette import status
 from api.pagination import CustomPage
 from constants import SRID_WGS84
-from core.dependencies import session_dependency
+from core.dependencies import (
+    session_dependency,
+    admin_dependency,
+    editor_dependency,
+    viewer_dependency,
+)
 from db import adder
 from db.location import Location
-from db.engine import get_db_session
 from schemas.location import CreateLocation, LocationResponse, UpdateLocation
-from schemas.thing import LocationWellResponse
 from services.geospatial_helper import make_within_wkt
-from services.query_helper import make_query, order_sort_filter
-from services.crud_helper import model_patcher
+from services.query_helper import make_query, order_sort_filter, simple_get_by_id
+from services.crud_helper import model_patcher, model_deleter
 
 from fastapi import APIRouter
 
@@ -44,12 +44,12 @@ router = APIRouter(prefix="/location", tags=["location"])
     status_code=status.HTTP_201_CREATED,
 )
 def create_location(
-    location_data: CreateLocation, session: Session = Depends(get_db_session)
+    location_data: CreateLocation, session: session_dependency, user: admin_dependency
 ) -> LocationResponse:
     """
     Create a new sample location in the database.
     """
-    return adder(session, Location, location_data)
+    return adder(session, Location, location_data, user=user)
 
 
 @router.patch(
@@ -59,12 +59,13 @@ def create_location(
 def update_location(
     location_id: int,
     location_data: UpdateLocation,
-    session: Session = Depends(get_db_session),
+    session: session_dependency,
+    user: editor_dependency,
 ) -> LocationResponse:
     """
     Update a sample location in the database.
     """
-    return model_patcher(session, Location, location_id, location_data)
+    return model_patcher(session, Location, location_id, location_data, user=user)
 
 
 # @router.get("/shapefile", summary="Get location as shapefile")
@@ -128,15 +129,15 @@ def update_location(
 )
 async def get_location(
     session: session_dependency,
+    user: viewer_dependency,
     nearby_point: str = None,
     nearby_distance_km: float = 1,
     within: str = None,
     query: str = None,
-    expand: str = None,
     sort: str = None,
     order: str = None,
     filter_: str = Query(alias="filter", default=None),
-) -> CustomPage[Union[LocationResponse, LocationWellResponse]]:
+) -> CustomPage[LocationResponse]:
     """
     Retrieve all wells from the database.
     """
@@ -154,17 +155,9 @@ async def get_location(
     elif within:
         sql = make_within_wkt(sql, within)
 
-    if expand == "well":
-        pass
-
-    def transformer(items):
-        if expand == "well":
-            return [LocationWellResponse.model_validate(item) for item in items]
-        return [LocationResponse.model_validate(item) for item in items]
-
     sql = order_sort_filter(sql, Location, sort, order, filter_)
 
-    return paginate(query=sql, conn=session, transformer=transformer)
+    return paginate(query=sql, conn=session)
 
 
 @router.get(
@@ -172,24 +165,23 @@ async def get_location(
     summary="Get location by ID",
 )
 async def get_location_by_id(
-    location_id: int, expand: str = None, session: Session = Depends(get_db_session)
-) -> LocationResponse | LocationWellResponse:
+    location_id: int, session: session_dependency, user: viewer_dependency
+) -> LocationResponse:
     """
     Retrieve a sample location by ID from the database.
     """
-    sql = select(Location).where(Location.id == location_id)
+    location = simple_get_by_id(session, Location, location_id)
+    return location
 
-    result = session.execute(sql)
-    location = result.scalar_one_or_none()
 
-    if not location:
-        return {"message": "Location not found"}
-
-    response_klass = LocationResponse
-    if expand == "well":
-        response_klass = LocationWellResponse
-
-    return response_klass.model_validate(location)
+@router.delete("/{location_id}", summary="Delete location by ID")
+async def delete_location(
+    location_id: int, session: session_dependency, user: admin_dependency
+) -> Response:
+    """
+    Delete a sample location by ID from the database.
+    """
+    return model_deleter(session, Location, location_id)
 
 
 # ============= EOF =============================================

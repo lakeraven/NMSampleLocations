@@ -13,7 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from .sensor import Sensor
-from .groundwaterlevel import GroundwaterLevelSensor
+from shapely import wkt
+
+
+def validate_wkt_geometry(value: str | None) -> str | None:
+    """
+    Validate that the provided string is a valid WKT geometry.
+    Raises ValueError if the geometry is invalid.
+    """
+    if value is None:
+        return value
+
+    try:
+        geometry = wkt.loads(value)
+        if not geometry.is_valid:
+            raise ValueError("WKT geometry is not topologically valid")
+        return value
+    except Exception as e:
+        raise ValueError(f"Invalid WKT geometry: {e}")
+
 
 # ============= EOF =============================================

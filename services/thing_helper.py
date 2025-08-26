@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from db import LocationThingAssociation, Thing, Base, Location
 from schemas.location import LocationResponse
 from db.group import Group, GroupThingAssociation
+from services.audit_helper import audit_add
 from services.geospatial_helper import make_within_wkt
 from services.query_helper import make_query, order_sort_filter
 from shapely import wkb
@@ -108,7 +109,9 @@ def get_db_things(
 
 
 # REFACTOR TODO: use enums (or enum-like object) for thing_type
-def add_thing(session: Session, data: BaseModel | dict, thing_type: str = None) -> Base:
+def add_thing(
+    session: Session, data: BaseModel | dict, thing_type: str = None, user: dict = None
+) -> Base:
 
     if isinstance(data, BaseModel):
         data = data.model_dump()
@@ -134,19 +137,22 @@ def add_thing(session: Session, data: BaseModel | dict, thing_type: str = None) 
     thing = Thing(**data)
     thing.thing_type = thing_type
 
+    audit_add(user, thing)
+
     session.add(thing)
     session.commit()
     session.refresh(thing)
 
     if group_id:
         assoc = GroupThingAssociation()
+        audit_add(user, assoc)
         assoc.group_id = group_id
         assoc.thing_id = thing.id
         session.add(assoc)
 
     if location_id is not None:
         assoc = LocationThingAssociation()
-
+        audit_add(user, assoc)
         assoc.location_id = location_id
         assoc.thing_id = thing.id
         session.add(assoc)

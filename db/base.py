@@ -40,8 +40,15 @@ class Base(DeclarativeBase):
 make_searchable(Base.metadata)
 
 
-def lexicon_term(**kw):
-    return mapped_column(String(100), ForeignKey("lexicon_term.term"), **kw)
+def lexicon_term(foreignkeykw=None, **kw):
+
+    fkw = foreignkeykw if foreignkeykw else {}
+
+    return mapped_column(
+        String(100),
+        ForeignKey("lexicon_term.term", onupdate="CASCADE", **fkw),
+        **kw,
+    )
 
 
 def pascal_to_snake(name):
@@ -61,6 +68,43 @@ class AuditMixin:
             DateTime(timezone=True),
             nullable=False,
             server_default=func.timezone("UTC", func.now()),
+        )
+
+    # TODO: there is probably no need to store both the id and name of the user. We should decide which attribute
+    #  included in the token payload is the most appropriate to use as the user identifier.
+    # included "claims"
+    # sub:  the subject of the token, which is a unique identifier for the user
+    # name: the name of the user
+    # email: the email address of the user
+    # given_name: the first name of the user
+    # preferred_username: the preferred username of the user
+    # nickname: the nickname of the user
+    @declared_attr
+    def created_by_name(self):
+        return Column(
+            String(255),
+            nullable=True,
+        )
+
+    @declared_attr
+    def created_by_id(self):
+        return Column(
+            String(255),
+            nullable=True,
+        )
+
+    @declared_attr
+    def updated_by_name(self):
+        return Column(
+            String(255),
+            nullable=True,
+        )
+
+    @declared_attr
+    def updated_by_id(self):
+        return Column(
+            String(255),
+            nullable=True,
         )
 
 
@@ -90,10 +134,6 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, nullable=False)
     username: Mapped[str] = mapped_column(String(length=255), nullable=False)
-    password: Mapped[str] = mapped_column(String(length=255), nullable=False)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def __str__(self):
         return self.username

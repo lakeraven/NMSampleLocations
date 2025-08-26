@@ -13,12 +13,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===============================================================================
-from pydantic import BaseModel
+from geoalchemy2 import WKBElement
+from geoalchemy2.shape import to_shape
+from pydantic import BaseModel, field_validator, model_validator
+from typing_extensions import Self
 
 from schemas import ORMBaseModel
+from services.validation.geospatial import validate_wkt_geometry
+
+
+class ValidateGroup(BaseModel):
+    project_area: str | None = None
+    description: str | None = None
+    parent_group_id: int | None = None
+
+    @field_validator("project_area")
+    def validate_area_is_wkt(cls, wkt):
+        valid_wkt = validate_wkt_geometry(wkt)
+        if "MULTIPOLYGON" not in valid_wkt:
+            raise ValueError("WKT must be a valid MULTIPOLYGON")
+
+        return valid_wkt
 
 
 # -------- CREATE ----------
+class CreateGroup(ValidateGroup):
+    """
+    Schema for creating a group.
+    """
+
+    name: str
+
+
 # -------- RESPONSE --------
 class GroupResponse(ORMBaseModel):
     """
@@ -26,22 +52,26 @@ class GroupResponse(ORMBaseModel):
     This model can be extended to include additional fields as needed.
     """
 
-    id: int
     name: str
-    description: str | None = None
-    parent_group_id: int | None = None
+    project_area: str | None
+    description: str | None
+    parent_group_id: int | None
+
+    @model_validator(mode="before")
+    def project_area_to_wkt(self: Self) -> Self:
+        if isinstance(self.project_area, WKBElement):
+            self.project_area = to_shape(self.project_area).wkt
+        return self
 
 
 # -------- UPDATE ----------
-class UpdateGroup(BaseModel):
+class UpdateGroup(ValidateGroup):
     """
     Pydantic model for updating a group.
     This model can be extended to include additional fields as needed.
     """
 
     name: str | None = None
-    description: str | None = None
-    parent_group_id: int | None = None
 
 
 # ============= EOF =============================================

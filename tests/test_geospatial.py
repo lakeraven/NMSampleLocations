@@ -16,10 +16,42 @@
 from pathlib import Path
 import pytest
 
-from db import Thing, Location, LocationThingAssociation
+from main import app
+from core.dependencies import (
+    admin_function,
+    editor_function,
+    amp_admin_function,
+    amp_editor_function,
+    viewer_function,
+    amp_viewer_function,
+)
+from db import Thing, Location, LocationThingAssociation, Group
 from db.engine import session_ctx
-from tests import client
+from tests import client, override_authentication
 from geoalchemy2 import functions as geofunc
+
+
+@pytest.fixture(scope="module", autouse=True)
+def override_authentication_dependency_fixture():
+    app.dependency_overrides[admin_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[editor_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[viewer_function] = override_authentication()
+    app.dependency_overrides[amp_admin_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[amp_editor_function] = override_authentication(
+        default={"name": "foobar", "sub": "1234567890"}
+    )
+    app.dependency_overrides[amp_viewer_function] = override_authentication()
+
+    yield
+
+    app.dependency_overrides = {}
+
 
 # @pytest.fixture(scope="module", autouse=True)
 # def location_fixture():
@@ -55,7 +87,41 @@ def populate():
 
         session.add(LocationThingAssociation(location=loc1, thing=thing1))
         session.add(LocationThingAssociation(location=loc2, thing=thing2))
+
+        group = Group(
+            name="Test Group Foo",
+            description="Test Group Description",
+            project_area="MULTIPOLYGON(((10 10, 20 10, 20 20, 10 20, 10 10)))",
+        )
+
+        session.add(group)
         session.commit()
+        yield
+
+        # Cleanup
+        session.delete(loc1)
+        session.delete(loc2)
+        session.delete(group)
+        session.commit()
+
+
+def test_get_project_area():
+    response = client.get("/geospatial/project-area/1")
+    assert response.status_code == 200
+    data = response.json()
+    assert "type" in data
+    assert data["type"] == "FeatureCollection"
+    assert "features" in data
+    print(data)
+    assert len(data["features"]) > 0
+    assert data["features"][0]["properties"]["group_id"] == 1
+    assert data["features"][0]["properties"]["group_name"] == "Test Group Foo"
+    assert (
+        data["features"][0]["properties"]["group_description"]
+        == "Test Group Description"
+    )
+    assert data["features"][0]["geometry"]["type"] == "MultiPolygon"
+    # assert data["features"][0][] == 'MULTIPOLYGON(((10 10, 20 10, 20 20, 10 20, 10 10)))'
 
 
 def test_get_geojson():
