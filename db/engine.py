@@ -16,6 +16,7 @@
 
 import asyncio
 import os
+import getpass
 
 from sqlalchemy import (
     create_engine,
@@ -106,10 +107,10 @@ else:
     password = os.environ.get("POSTGRES_PASSWORD", "")
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
-    user = os.environ.get("POSTGRES_USER", "postgres")
+    user = os.environ.get("POSTGRES_USER", getpass.getuser())
     name = os.environ.get("POSTGRES_DB", "postgres")
 
-    auth = f"{user}:{password}@" if user and password else ""
+    auth = f"{user}:{password}@" if user and password else f"{user}@" if user else ""
     port_part = f":{port}" if port else ""
     url = f"postgresql+pg8000://{auth}{host}{port_part}/{name}"
     # else:

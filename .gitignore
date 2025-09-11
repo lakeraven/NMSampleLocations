@@ -21,6 +21,12 @@ development.db
 reset_db.sh
 tests/uploads
 
+# Generated export files
+*.shp
+*.shx
+*.dbf
+*.zip
+
 
 # deployment files
 app.yaml
